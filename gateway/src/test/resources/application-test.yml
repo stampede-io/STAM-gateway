@@ -1,0 +1,13 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: test-backend
+          uri: ${test.backend.url:http://localhost:9999}
+          predicates:
+            - Path=/api/v1/**
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${test.jwk-set-uri:http://localhost:9999/oauth2/jwks}
