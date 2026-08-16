@@ -40,11 +40,28 @@ spring:
             allowed-headers: "*"
             allow-credentials: true
             max-age: 3600
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   security:
     oauth2:
       resourceserver:
         jwt:
           jwk-set-uri: ${JWK_SET_URI:http://localhost:8084/oauth2/jwks}
+
+gateway:
+  rate-limit:
+    enabled: true
+    routes:
+      booking:
+        replenish-rate: 10
+        burst-capacity: 20
+        key-type: USER
+      identity:
+        replenish-rate: 5
+        burst-capacity: 10
+        key-type: IP
 
 server:
   port: ${SERVER_PORT:8085}
