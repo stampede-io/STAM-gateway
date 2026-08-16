@@ -1,20 +1,27 @@
 package com.stampedeio.gateway;
 
+import java.time.Instant;
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 
 import reactor.core.publisher.Mono;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockJwt;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureWebTestClient
 @ActiveProfiles("test")
 class GatewayIT {
 
@@ -23,6 +30,18 @@ class GatewayIT {
 
     @MockitoBean
     ReactiveJwtDecoder jwtDecoder;
+
+    @BeforeEach
+    void setUp() {
+        when(jwtDecoder.decode(eq("valid-token"))).thenReturn(Mono.just(
+                new Jwt("valid-token",
+                        Instant.now(), Instant.now().plusSeconds(300),
+                        Map.of("alg", "RS256"),
+                        Map.of("sub", "test-user", "scope", "openid profile email"))));
+
+        when(jwtDecoder.decode(eq("invalid.token.here"))).thenReturn(
+                Mono.error(new org.springframework.security.oauth2.jwt.BadJwtException("Invalid token")));
+    }
 
     @Test
     void requestWithoutJwt_returns401() {
@@ -37,9 +56,6 @@ class GatewayIT {
 
     @Test
     void requestWithInvalidJwt_returns401() {
-        when(jwtDecoder.decode(anyString()))
-                .thenReturn(Mono.error(new org.springframework.security.oauth2.jwt.BadJwtException("Invalid token")));
-
         webClient.get().uri("/api/v1/shows")
                 .header("Authorization", "Bearer invalid.token.here")
                 .exchange()
@@ -49,10 +65,8 @@ class GatewayIT {
 
     @Test
     void requestWithValidJwt_passesAuthentication() {
-        webClient.mutateWith(mockJwt().jwt(jwt -> jwt
-                        .subject("test-user")
-                        .claim("scope", "openid profile email")))
-                .get().uri("/api/v1/shows")
+        webClient.get().uri("/api/v1/shows")
+                .header("Authorization", "Bearer valid-token")
                 .exchange()
                 .expectStatus().value(status -> {
                     assert status != 401 && status != 403 :
@@ -62,8 +76,8 @@ class GatewayIT {
 
     @Test
     void correlationIdInjected_whenAbsent() {
-        webClient.mutateWith(mockJwt())
-                .get().uri("/api/v1/shows")
+        webClient.get().uri("/api/v1/shows")
+                .header("Authorization", "Bearer valid-token")
                 .exchange()
                 .expectHeader().exists("X-Correlation-ID");
     }
@@ -72,8 +86,8 @@ class GatewayIT {
     void correlationIdPreserved_whenPresent() {
         String existingId = "my-trace-id-123";
 
-        webClient.mutateWith(mockJwt())
-                .get().uri("/api/v1/shows")
+        webClient.get().uri("/api/v1/shows")
+                .header("Authorization", "Bearer valid-token")
                 .header("X-Correlation-ID", existingId)
                 .exchange()
                 .expectHeader().valueEquals("X-Correlation-ID", existingId);
