@@ -1,3 +1,7 @@
+eureka:
+  client:
+    enabled: false
+
 gateway:
   rate-limit:
     enabled: false
@@ -9,6 +13,8 @@ management:
 
 spring:
   cloud:
+    config:
+      enabled: false
     gateway:
       routes:
         - id: catalog
