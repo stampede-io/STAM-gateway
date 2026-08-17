@@ -1,3 +1,7 @@
+eureka:
+  client:
+    enabled: false
+
 gateway:
   rate-limit:
     enabled: false
