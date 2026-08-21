@@ -16,27 +16,29 @@ spring:
     config:
       enabled: false
     gateway:
-      routes:
-        - id: catalog
-          uri: http://localhost:19999
-          predicates:
-            - Path=/api/v1/venues/**,/api/v1/events/**,/api/v1/shows/**,/api/v1/seats/**
-        - id: identity
-          uri: http://localhost:19999
-          predicates:
-            - Path=/oauth2/**,/.well-known/**,/login,/api/v1/users/**
-        - id: booking
-          uri: http://localhost:19999
-          predicates:
-            - Path=/api/v1/reservations/**,/api/v1/bookings/**
-        - id: payment
-          uri: http://localhost:19999
-          predicates:
-            - Path=/api/v1/payments/**
-        - id: notification
-          uri: http://localhost:19999
-          predicates:
-            - Path=/api/v1/notifications/**
+      server:
+        webflux:
+          routes:
+            - id: catalog
+              uri: http://localhost:19999
+              predicates:
+                - Path=/api/v1/venues/**,/api/v1/events/**,/api/v1/shows/**,/api/v1/seats/**
+            - id: identity
+              uri: http://localhost:19999
+              predicates:
+                - Path=/oauth2/**,/.well-known/**,/login,/api/v1/users/**
+            - id: booking
+              uri: http://localhost:19999
+              predicates:
+                - Path=/api/v1/reservations/**,/api/v1/bookings/**
+            - id: payment
+              uri: http://localhost:19999
+              predicates:
+                - Path=/api/v1/payments/**
+            - id: notification
+              uri: http://localhost:19999
+              predicates:
+                - Path=/api/v1/notifications/**
   security:
     oauth2:
       resourceserver:
