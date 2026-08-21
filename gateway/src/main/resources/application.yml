@@ -5,43 +5,45 @@ spring:
     import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
   cloud:
     gateway:
-      routes:
-        - id: identity
-          uri: ${IDENTITY_URI:http://localhost:8084}
-          predicates:
-            - Path=/oauth2/**,/.well-known/**,/login,/api/v1/users/**
-        - id: catalog
-          uri: ${CATALOG_URI:http://localhost:8081}
-          predicates:
-            - Path=/api/v1/venues/**,/api/v1/events/**,/api/v1/shows/**,/api/v1/seats/**
-        - id: booking
-          uri: ${BOOKING_URI:http://localhost:8082}
-          predicates:
-            - Path=/api/v1/reservations/**,/api/v1/bookings/**
-        - id: payment
-          uri: ${PAYMENT_URI:http://localhost:8083}
-          predicates:
-            - Path=/api/v1/payments/**
-        - id: notification
-          uri: ${NOTIFICATION_URI:http://localhost:8085}
-          predicates:
-            - Path=/api/v1/notifications/**
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowed-origins:
-              - ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
-              - https://stampede.vercel.app
-            allowed-methods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - PATCH
-              - OPTIONS
-            allowed-headers: "*"
-            allow-credentials: true
-            max-age: 3600
+      server:
+        webflux:
+          routes:
+            - id: identity
+              uri: ${IDENTITY_URI:http://localhost:8084}
+              predicates:
+                - Path=/oauth2/**,/.well-known/**,/login,/api/v1/users/**
+            - id: catalog
+              uri: ${CATALOG_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/venues/**,/api/v1/events/**,/api/v1/shows/**,/api/v1/seats/**
+            - id: booking
+              uri: ${BOOKING_URI:http://localhost:8082}
+              predicates:
+                - Path=/api/v1/reservations/**,/api/v1/bookings/**
+            - id: payment
+              uri: ${PAYMENT_URI:http://localhost:8083}
+              predicates:
+                - Path=/api/v1/payments/**
+            - id: notification
+              uri: ${NOTIFICATION_URI:http://localhost:8085}
+              predicates:
+                - Path=/api/v1/notifications/**
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins:
+                  - ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
+                  - https://stampede.vercel.app
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - PATCH
+                  - OPTIONS
+                allowed-headers: "*"
+                allow-credentials: true
+                max-age: 3600
   data:
     redis:
       host: ${REDIS_HOST:localhost}
