@@ -116,10 +116,26 @@ class RateLimitIT {
                 .thenReturn(Mono.just(buildJwt("user-b-token", "user-B")));
     }
 
+    /**
+     * The token bucket replenishes on whole-second boundaries
+     * ({@code Instant.now().getEpochSecond()}), so a burst that straddles one
+     * gets topped up mid-loop and lets more than {@code burst-capacity}
+     * through. Start each burst at the top of a fresh second to give the loop
+     * a full second of headroom.
+     */
+    private static void alignToSecondBoundary() {
+        long start = Instant.now().getEpochSecond();
+        while (Instant.now().getEpochSecond() == start) {
+            Thread.onSpinWait();
+        }
+    }
+
     @Test
     void authenticatedBurst_returns429AfterLimit() {
         int allowed = 0;
         int rejected = 0;
+
+        alignToSecondBoundary();
 
         for (int i = 0; i < 10; i++) {
             var result = webClient.post().uri("/api/v1/reservations")
@@ -140,6 +156,8 @@ class RateLimitIT {
 
     @Test
     void rateLimitedResponse_has429WithRetryAfterAndProblemJson() {
+        alignToSecondBoundary();
+
         for (int i = 0; i < 5; i++) {
             webClient.post().uri("/api/v1/reservations")
                     .header("Authorization", "Bearer burst-user-2-token")
@@ -171,6 +189,8 @@ class RateLimitIT {
     @Test
     void ipBasedRateLimit_appliesOnAuthEndpoint() {
         int rejected = 0;
+
+        alignToSecondBoundary();
 
         for (int i = 0; i < 6; i++) {
             var result = webClient.post().uri("/oauth2/token")
