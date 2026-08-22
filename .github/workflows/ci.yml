@@ -3,6 +3,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ['v*']
 jobs:
   ci:
     uses: stampede-io/.github/.github/workflows/service-ci.yml@main
