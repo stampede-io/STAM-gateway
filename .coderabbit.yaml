@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit configuration for STAM-gateway
+# Spring Cloud Gateway (WebFlux) - the single front door.
+language: en-US
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "Dev"
+      - "main"
+
+  path_filters:
+    - "!**/target/**"
+    - "!**/.idea/**"
+
+  path_instructions:
+    - path: "gateway/src/main/resources/application.yml"
+      instructions: >
+        CRITICAL, learned the hard way - Spring Cloud Gateway 2025.x
+        (spring-cloud-starter-gateway-server-webflux) reads routes from
+        `spring.cloud.gateway.server.webflux.routes`, NOT the pre-2025
+        `spring.cloud.gateway.routes`. Using the old key binds to nothing: the
+        gateway starts, registers, and reports status UP while answering every
+        proxied path with 404, and the health check does not catch it because
+        /actuator/health is served by the gateway itself rather than through a
+        route. Flag any route config moved to or left at the legacy key.
+        Also flag: (1) a new backend service added to compose without a
+        matching route predicate here; (2) a route predicate that overlaps an
+        existing one ambiguously - order matters and the first match wins;
+        (3) globalcors allowed-origins containing "*" while allow-credentials
+        is true - that combination is rejected by browsers and is a security
+        smell; (4) any route added without a corresponding gateway.rate-limit
+        entry, or a replenish-rate/burst-capacity change that is not justified
+        in the PR description (these values are cited in the published k6
+        report); (5) jwk-set-uri pointing anywhere other than the identity
+        service.
+
+    - path: "gateway/src/main/resources/scripts/rate-limiter.lua"
+      instructions: >
+        This Lua script runs inside Redis and must be atomic. Flag any change
+        that splits a read and its dependent write across separate EVAL calls,
+        introduces a race between checking and decrementing the bucket, or
+        uses a non-deterministic value (TIME, RANDOMKEY) in a way that breaks
+        replication safety. Flag missing key expiry - buckets that never
+        expire leak Redis memory under user churn.
+
+    - path: "gateway/src/main/java/com/stampedeio/gateway/filter/**"
+      instructions: >
+        CorrelationIdFilter must mint a correlation ID for every inbound
+        request and propagate it downstream - flag any path that can bypass it
+        or overwrite a client-supplied value without validation. RateLimitFilter
+        keys booking on USER and identity on IP; flag a key-type change without
+        justification, since IP-keying a user-scoped route means one NAT
+        gateway throttles every user behind it. This is WebFlux: flag any
+        blocking call (JDBC, RestTemplate, Thread.sleep, .block()) on the
+        reactive path - it will stall the event loop under load, and the
+        gateway is already the throughput bottleneck at 500+ VUs.
+
+    - path: "gateway/src/main/java/com/stampedeio/gateway/config/SecurityConfig.java"
+      instructions: >
+        JWT is validated here once, so downstream services trust the gateway.
+        Flag any permitAll() added to a path that carries user data, any
+        route that bypasses JWT validation, and any change that would forward
+        an unvalidated Authorization header downstream.
+
+    - path: "gateway/src/test/java/**"
+      instructions: >
+        GatewayIT and RateLimitIT prove routing and the 429 boundary. Flag
+        added @Disabled, loosened assertions, or a Testcontainers Redis
+        swapped for a mock - the rate limiter's correctness is in the Redis
+        interaction, so mocking it tests nothing.
+
+  tools:
+    gitleaks:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    actionlint:
+      enabled: true
+    hadolint:
+      enabled: true
+    semgrep:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
