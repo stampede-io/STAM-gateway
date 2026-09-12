@@ -12,6 +12,14 @@ spring:
               uri: ${IDENTITY_URI:http://localhost:8084}
               predicates:
                 - Path=/oauth2/**,/.well-known/**,/login,/api/v1/users/**
+              filters:
+                # STAM-440: identity builds its /login and post-authorize
+                # redirects from the Host it sees on the request. Without this,
+                # NettyRoutingFilter rewrites Host to the proxied target
+                # (identity:8080) — a compose-internal name the browser can't
+                # resolve. PreserveHostHeader keeps the original Host (the
+                # gateway's own, as the browser addressed it) end to end.
+                - PreserveHostHeader
             - id: catalog
               uri: ${CATALOG_URI:http://localhost:8081}
               predicates:
@@ -30,9 +38,18 @@ spring:
                 - Path=/api/v1/notifications/**
           globalcors:
             cors-configurations:
-              '[/**]':
+              # STAM-440: scoped to the fetch/XHR surface only. Applying this to
+              # /** also covered /login and /oauth2/authorize — pure browser
+              # navigations, never same-origin XHR — and Spring's CorsWebFilter
+              # rejects ANY Origin it doesn't recognize, including the literal
+              # "null" Chromium sends on a same-origin POST navigation from a
+              # page served with Referrer-Policy: no-referrer (identity's
+              # default Spring Security header). That turned the login form
+              # submit into a 403 with no relation to a real cross-origin call.
+              '[/api/v1/**]':
                 allowed-origins:
                   - ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
+                  - http://localhost:5173
                   - https://stampede.vercel.app
                 allowed-methods:
                   - GET
@@ -66,6 +83,14 @@ gateway:
         replenish-rate: 5
         burst-capacity: 10
         key-type: IP
+
+# BFF token handler (ADR-0005). Strips the refresh token from identity's token
+# response into an httpOnly cookie; the SPA only ever sees the access token.
+bff:
+  identity-uri: ${IDENTITY_URI:http://localhost:8084}
+  cookie:
+    # false only for local dev over plain http; true everywhere a proxy terminates TLS
+    secure: ${BFF_COOKIE_SECURE:true}
 
 server:
   port: ${SERVER_PORT:8085}
