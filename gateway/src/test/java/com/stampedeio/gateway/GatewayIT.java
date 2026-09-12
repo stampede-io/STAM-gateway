@@ -45,7 +45,8 @@ class GatewayIT {
 
     @Test
     void requestWithoutJwt_returns401() {
-        webClient.get().uri("/api/v1/shows")
+        // catalog GETs are public now, so use a booking path to prove auth is enforced
+        webClient.get().uri("/api/v1/reservations/00000000-0000-0000-0000-000000000000")
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectHeader().contentType("application/problem+json")
@@ -56,7 +57,7 @@ class GatewayIT {
 
     @Test
     void requestWithInvalidJwt_returns401() {
-        webClient.get().uri("/api/v1/shows")
+        webClient.get().uri("/api/v1/reservations/00000000-0000-0000-0000-000000000000")
                 .header("Authorization", "Bearer invalid.token.here")
                 .exchange()
                 .expectStatus().isUnauthorized()
@@ -98,6 +99,20 @@ class GatewayIT {
         webClient.get().uri("/actuator/health")
                 .exchange()
                 .expectStatus().isOk();
+    }
+
+    @Test
+    void catalogGet_isPublic_writeStillNeedsJwt() {
+        webClient.get().uri("/api/v1/shows/00000000-0000-0000-0000-000000000000/seats")
+                .exchange()
+                .expectStatus().value(status -> {
+                    assert status != 401 && status != 403 :
+                            "Expected catalog GET to be public but got " + status;
+                });
+
+        webClient.post().uri("/api/v1/reservations")
+                .exchange()
+                .expectStatus().isUnauthorized();
     }
 
     @Test
