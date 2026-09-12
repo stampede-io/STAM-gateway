@@ -132,6 +132,33 @@ class BffAuthIT {
     }
 
     @Test
+    void refresh_when5xxFromIdentity_doesNotClearCookie() {
+        stubIdentityToken("""
+                {"error":"server_error"}
+                """, 503);
+
+        web.post().uri("/api/v1/oauth2/refresh")
+                .cookie("stampede_rt", "still-good-rt")
+                .exchange()
+                .expectStatus().is5xxServerError()
+                .expectHeader().doesNotExist("Set-Cookie");
+    }
+
+    @Test
+    void identityUnreachable_returns502() {
+        identity.stubFor(post(urlEqualTo("/oauth2/token")).willReturn(aResponse()
+                .withStatus(200)
+                .withFixedDelay(4_500)));
+
+        web.mutate().responseTimeout(java.time.Duration.ofSeconds(10)).build()
+                .post().uri("/api/v1/oauth2/token")
+                .body(BodyInserters.fromFormData(codeExchangeForm()))
+                .exchange()
+                .expectStatus().value(status -> assertThat(status).isEqualTo(502))
+                .expectHeader().contentType("application/problem+json");
+    }
+
+    @Test
     void logout_dropsTheCookie() {
         web.post().uri("/api/v1/oauth2/logout")
                 .cookie("stampede_rt", "rt-1")

@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -49,19 +50,25 @@ public class BffAuthController {
     private static final String COOKIE_PATH = "/api/v1/oauth2";
     private static final String CORRELATION_ID = "X-Correlation-ID";
     private static final String SPA_CLIENT_ID = "stampede-spa";
-    private static final Duration REFRESH_COOKIE_TTL = Duration.ofDays(7);
+    private static final Duration IDENTITY_TIMEOUT = Duration.ofSeconds(3);
 
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_MAP =
             new ParameterizedTypeReference<>() {};
 
     private final WebClient identity;
     private final boolean cookieSecure;
+    private final Duration refreshCookieTtl;
 
     public BffAuthController(
             @Value("${bff.identity-uri:${IDENTITY_URI:http://localhost:8084}}") String identityUri,
-            @Value("${bff.cookie.secure:true}") boolean cookieSecure) {
+            @Value("${bff.cookie.secure:true}") boolean cookieSecure,
+            // Same env var identity itself uses for REFRESH_TOKEN_TTL_DAYS — wire
+            // both from one compose value so the cookie can't outlive (or expire
+            // before) the token it's carrying.
+            @Value("${bff.cookie.refresh-ttl-days:${REFRESH_TOKEN_TTL_DAYS:7}}") long refreshTtlDays) {
         this.identity = WebClient.create(identityUri);
         this.cookieSecure = cookieSecure;
+        this.refreshCookieTtl = Duration.ofDays(refreshTtlDays);
     }
 
     /** Authorization-code exchange. Forwards the SPA's PKCE form to identity. */
@@ -90,7 +97,18 @@ public class BffAuthController {
         form.add("client_id", SPA_CLIENT_ID);
 
         return exchangeWithIdentity(form, correlationId)
-                .map(resp -> resp.getStatusCode().is2xxSuccessful() ? resp : unauthorized(true));
+                .map(resp -> {
+                    // Only a 4xx from identity means the token itself is bad
+                    // (expired, revoked, reuse detected) — clear the cookie and
+                    // send the SPA back through login. A 5xx is identity having
+                    // a bad moment, not proof the session is invalid; pass it
+                    // through as-is so the SPA can retry instead of being
+                    // logged out over a transient outage.
+                    if (resp.getStatusCode().is4xxClientError()) {
+                        return unauthorized(true);
+                    }
+                    return resp;
+                });
     }
 
     /** Drop the cookie. The refresh family self-destructs on next reuse. */
@@ -113,16 +131,19 @@ public class BffAuthController {
 
         return request
                 .body(BodyInserters.fromFormData(form))
-                .exchangeToMono(this::relayTokenResponse);
+                .exchangeToMono(upstream -> relayTokenResponse(upstream, correlationId))
+                .timeout(IDENTITY_TIMEOUT)
+                .onErrorResume(ex -> Mono.just(upstreamUnavailable(ex, correlationId)));
     }
 
-    private Mono<ResponseEntity<Map<String, Object>>> relayTokenResponse(ClientResponse upstream) {
+    private Mono<ResponseEntity<Map<String, Object>>> relayTokenResponse(
+            ClientResponse upstream, String correlationId) {
         return upstream.bodyToMono(JSON_MAP)
                 .defaultIfEmpty(Map.of())
                 .map(body -> {
                     if (!upstream.statusCode().is2xxSuccessful()) {
-                        log.warn("identity token endpoint rejected request: {} {}",
-                                upstream.statusCode(), body.get("error"));
+                        log.warn("identity token endpoint rejected request [correlationId={}]: {} {}",
+                                correlationId, upstream.statusCode(), body.get("error"));
                         return ResponseEntity.status(upstream.statusCode())
                                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                                 .body(problem(upstream.statusCode().value(), body));
@@ -144,6 +165,15 @@ public class BffAuthController {
                     }
                     return response.body(out);
                 });
+    }
+
+    /** identity unreachable, timed out, or sent something that isn't JSON. */
+    private ResponseEntity<Map<String, Object>> upstreamUnavailable(Throwable ex, String correlationId) {
+        log.warn("identity token endpoint unreachable [correlationId={}]: {}", correlationId, ex.toString());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(problem(HttpStatus.BAD_GATEWAY.value(),
+                        Map.of("error_description", "Identity is temporarily unavailable")));
     }
 
     private ResponseEntity<Map<String, Object>> unauthorized(boolean clearCookie) {
@@ -169,7 +199,7 @@ public class BffAuthController {
     }
 
     private ResponseCookie refreshCookie(String value) {
-        return baseCookie(value).maxAge(REFRESH_COOKIE_TTL).build();
+        return baseCookie(value).maxAge(refreshCookieTtl).build();
     }
 
     private ResponseCookie clearedCookie() {
