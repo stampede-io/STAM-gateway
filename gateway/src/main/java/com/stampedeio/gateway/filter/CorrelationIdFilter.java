@@ -25,7 +25,14 @@ public class CorrelationIdFilter implements WebFilter, Ordered {
 
         exchange.getResponse().getHeaders().set(CORRELATION_ID_HEADER, correlationId);
 
-        return chain.filter(exchange);
+        // Without this the ID exists only on the response and every downstream
+        // service mints a different one of its own.
+        final String id = correlationId;
+        ServerWebExchange forwarded = exchange.mutate()
+                .request(request -> request.headers(headers -> headers.set(CORRELATION_ID_HEADER, id)))
+                .build();
+
+        return chain.filter(forwarded);
     }
 
     @Override
