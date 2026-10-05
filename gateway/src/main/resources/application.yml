@@ -7,6 +7,10 @@ spring:
     gateway:
       server:
         webflux:
+          default-filters:
+            # Services echo the header back (booking spells it X-Correlation-Id), so
+            # without this the browser gets it twice and fetch() joins it as "id, id".
+            - DedupeResponseHeader=X-Correlation-ID, RETAIN_FIRST
           routes:
             - id: identity
               uri: ${IDENTITY_URI:http://localhost:8084}

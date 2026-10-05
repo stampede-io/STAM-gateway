@@ -36,6 +36,8 @@ import static org.mockito.Mockito.when;
 class CorrelationForwardingIT {
 
     private static final String HEADER = "X-Correlation-ID";
+    private static final String UUID_PATTERN =
+            "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
     private static final AtomicReference<String> receivedByDownstream = new AtomicReference<>();
 
     static DisposableServer downstream;
@@ -51,7 +53,12 @@ class CorrelationForwardingIT {
         downstream = HttpServer.create()
                 .port(19999)
                 .handle((req, res) -> {
-                    receivedByDownstream.set(req.requestHeaders().get(HEADER));
+                    String received = req.requestHeaders().get(HEADER);
+                    receivedByDownstream.set(received);
+                    // booking's filter echoes the ID back, spelled X-Correlation-Id
+                    if (received != null) {
+                        res.header("X-Correlation-Id", received);
+                    }
                     return res.status(200)
                             .header("Content-Type", "application/json")
                             .sendString(Mono.just("{}"));
@@ -99,6 +106,47 @@ class CorrelationForwardingIT {
                 .expectHeader().valueEquals(HEADER, "my-trace-id-123");
 
         assertThat(receivedByDownstream.get()).isEqualTo("my-trace-id-123");
+    }
+
+    @Test
+    void unsafeId_isReplacedNotForwarded() {
+        String hostile = "x\",\"status\":\"CONFIRMED";
+
+        String onResponse = webClient.get().uri("/api/v1/reservations/00000000-0000-0000-0000-000000000000")
+                .header("Authorization", "Bearer valid-token")
+                .header(HEADER, hostile)
+                .exchange()
+                .expectStatus().isOk()
+                .returnResult(String.class)
+                .getResponseHeaders().getFirst(HEADER);
+
+        assertThat(receivedByDownstream.get()).isNotEqualTo(hostile).matches(UUID_PATTERN);
+        assertThat(onResponse).isEqualTo(receivedByDownstream.get());
+    }
+
+    @Test
+    void oversizedId_isReplacedNotForwarded() {
+        String tooLong = "a".repeat(65);
+
+        webClient.get().uri("/api/v1/reservations/00000000-0000-0000-0000-000000000000")
+                .header("Authorization", "Bearer valid-token")
+                .header(HEADER, tooLong)
+                .exchange()
+                .expectStatus().isOk();
+
+        assertThat(receivedByDownstream.get()).isNotEqualTo(tooLong).matches(UUID_PATTERN);
+    }
+
+    @Test
+    void echoedHeaderFromService_isNotDuplicatedOnResponse() {
+        var values = webClient.get().uri("/api/v1/reservations/00000000-0000-0000-0000-000000000000")
+                .header("Authorization", "Bearer valid-token")
+                .exchange()
+                .expectStatus().isOk()
+                .returnResult(String.class)
+                .getResponseHeaders().get(HEADER);
+
+        assertThat(values).hasSize(1);
     }
 
     @Test
