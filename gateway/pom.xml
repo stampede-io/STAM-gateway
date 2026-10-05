@@ -31,6 +31,8 @@
 		<spring-cloud.version>2025.1.2</spring-cloud.version>
 		<netty.version>4.2.17.Final</netty.version>
 		<httpcore5.version>5.4.3</httpcore5.version>
+		<jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+		<jackson-bom.version>3.1.7</jackson-bom.version>
 	</properties>
 
 	<dependencyManagement>
@@ -41,6 +43,12 @@
 				<version>${spring-cloud.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
+			</dependency>
+			<!-- Not managed by the Boot BOM; pulled in by spring-cloud-starter. CVE-2026-8763 CRITICAL, fixed in 1.85 -->
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcprov-jdk18on</artifactId>
+				<version>1.85</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
