@@ -14,11 +14,21 @@ spec:
       labels:
         {{- include "gateway.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: {{ include "gateway.serviceAccountName" . }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8080
           envFrom:
@@ -30,6 +40,9 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: {{ .Values.probes.liveness.path }}
@@ -48,3 +61,6 @@ spec:
               port: 8080
             failureThreshold: {{ .Values.probes.startup.failureThreshold }}
             periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
