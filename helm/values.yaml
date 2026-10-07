@@ -1,0 +1,54 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/stampede-io/gateway
+  tag: "" # defaults to Chart.appVersion
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    memory: 640Mi
+
+probes:
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  startup:
+    path: /actuator/health/startup
+    failureThreshold: 30
+    periodSeconds: 5
+
+# Non-sensitive config -> ConfigMap, mounted as env vars.
+config:
+  SPRING_PROFILES_ACTIVE: "k8s"
+  SERVER_PORT: "8080"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  IDENTITY_URI: "http://identity:8080"
+  CATALOG_URI: "http://catalog:8080"
+  BOOKING_URI: "http://booking:8080"
+  PAYMENT_URI: "http://payment:8080"
+  NOTIFICATION_URI: "http://notification:8080"
+  JWK_SET_URI: "http://identity:8080/oauth2/jwks"
+  CORS_ALLOWED_ORIGIN: "http://localhost:3000"
+  BFF_COOKIE_SECURE: "true"
+
+# Gateway has no DB and no secrets of its own today — kept for parity with
+# the other services' chart shape, and because a future env var here
+# (an API key, a signing secret) shouldn't need a template change too.
+secretName: ""
