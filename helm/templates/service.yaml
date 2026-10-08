@@ -10,3 +10,21 @@ spec:
   ports:
     - port: {{ .Values.service.port }}
       targetPort: 8080
+---
+# STAM-64 / AC2: the Rollout controller repoints this Service's selector
+# at whichever ReplicaSet is currently "preview" (adding its own
+# rollouts-pod-template-hash) -- it's not a static selector match on its
+# own. `kubectl port-forward svc/{{ include "gateway.fullname" . }}-preview`
+# reaches the new version before promotion.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gateway.fullname" . }}-preview
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "gateway.selectorLabels" . | nindent 4 }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8080

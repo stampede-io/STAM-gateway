@@ -1,11 +1,25 @@
-apiVersion: apps/v1
-kind: Deployment
+{{- /*
+STAM-64 / AC1, AC5: Rollout with strategy.blueGreen, not canary — the
+gateway is the one service a reviewer wants to validate by hand against
+the live cluster (AC2) before an instant, all-or-nothing cutover (AC3/
+AC4), not a gradual percentage ramp. autoPromotionEnabled: false means a
+new version always lands on previewService and sits there until a human
+runs `kubectl argo rollouts promote` or clicks promote in the ArgoCD UI —
+never automatic.
+*/ -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: {{ include "gateway.fullname" . }}
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    blueGreen:
+      activeService: {{ include "gateway.fullname" . }}
+      previewService: {{ include "gateway.fullname" . }}-preview
+      autoPromotionEnabled: false
   selector:
     matchLabels:
       {{- include "gateway.selectorLabels" . | nindent 6 }}
