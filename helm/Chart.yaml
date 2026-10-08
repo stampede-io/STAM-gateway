@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gateway
+description: STAMPEDE gateway service — Spring Cloud Gateway, JWT validation, Redis rate limiting, correlation IDs
+type: application
+version: 0.0.1-SNAPSHOT
+appVersion: "0.0.1-SNAPSHOT"
