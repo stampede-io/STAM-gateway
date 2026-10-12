@@ -35,7 +35,14 @@ public class CorrelationIdFilter implements WebFilter, Ordered {
                 .request(request -> request.headers(headers -> headers.set(CORRELATION_ID_HEADER, id)))
                 .build();
 
-        return chain.filter(forwarded);
+        // STAM-67 / AC1-AC2: WebFlux has no request thread to pin MDC to, so
+        // correlationId rides in the Reactor Context instead. The
+        // context-propagation dependency (pom.xml) is what bridges this
+        // into MDC for every log line emitted while the request is being
+        // processed -- contextWrite() alone does nothing for logging
+        // without it.
+        return chain.filter(forwarded)
+                .contextWrite(ctx -> ctx.put("correlationId", id).put("service", "gateway"));
     }
 
     @Override

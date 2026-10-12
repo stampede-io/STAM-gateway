@@ -70,6 +70,35 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- STAM-67 / AC1: structured JSON logs. -->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>8.0</version>
+		</dependency>
+
+		<!-- STAM-67 / AC2: WebFlux has no request thread to pin MDC to, so
+		     correlationId travels in the Reactor Context instead (set via
+		     .contextWrite() in CorrelationIdFilter). This dependency is what
+		     makes Spring Boot auto-enable Reactor's automatic context
+		     propagation, which is what actually bridges that Context value
+		     into MDC for every log line emitted while the request is being
+		     processed. Without it, .contextWrite() alone does nothing for
+		     logging. -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>context-propagation</artifactId>
+		</dependency>
+
+		<!-- STAM-67 / AC1 (traceId): no exporter configured yet, that is
+		     STAM-68's job (OTel tracing across HTTP + Kafka). This alone gets
+		     Boot's BraveAutoConfiguration to generate a span per request and
+		     its MDCScopeDecorator to put traceId/spanId into every log line. -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-tracing-bridge-brave</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>correlationId</includeMdcKeyName>
+            <includeMdcKeyName>service</includeMdcKeyName>
+            <!-- userId is deliberately absent here: the gateway validates
+                 and relays the JWT (CLAUDE.md §16), but CorrelationIdFilter
+                 runs before Spring Security's reactive auth and there's no
+                 clean hook to read the authenticated principal back into
+                 this same WebFilter's Reactor Context afterwards. Every
+                 user-scoped request still gets a userId at booking/catalog/
+                 identity, one hop later. -->
+            <!-- Populated automatically by micrometer-tracing-bridge-brave's MDC
+                 scope decorator, no manual MDC.put anywhere for these two. -->
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <timeZone>UTC</timeZone>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <version>[ignore]</version>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <appender name="TEXT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} [correlationId=%X{correlationId}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <springProfile name="!test">
+        <root level="INFO">
+            <appender-ref ref="JSON" />
+        </root>
+    </springProfile>
+
+    <springProfile name="test">
+        <root level="INFO">
+            <appender-ref ref="TEXT" />
+        </root>
+    </springProfile>
+
+</configuration>
