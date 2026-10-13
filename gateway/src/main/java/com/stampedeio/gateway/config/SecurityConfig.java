@@ -27,7 +27,15 @@ public class SecurityConfig {
                                 "/oauth2/**",
                                 "/.well-known/**",
                                 "/login",
+                                "/api/v1/oauth2/**",
                                 "/api/v1/users/register"
+                        ).permitAll()
+                        // Catalog reads are public (CLAUDE.md §16); writes still need a JWT.
+                        .pathMatchers(HttpMethod.GET,
+                                "/api/v1/venues/**",
+                                "/api/v1/events/**",
+                                "/api/v1/shows/**",
+                                "/api/v1/seats/**"
                         ).permitAll()
                         .anyExchange().authenticated()
                 )

@@ -29,8 +29,14 @@
 	<properties>
 		<java.version>21</java.version>
 		<spring-cloud.version>2025.1.2</spring-cloud.version>
-		<netty.version>4.2.16.Final</netty.version>
+		<netty.version>4.2.17.Final</netty.version>
 		<httpcore5.version>5.4.3</httpcore5.version>
+		<!-- Jackson CVE-2026-89407, -89425, -68497, -91776, -91777 (HIGH). Remove once the Boot BOM is at or above these. -->
+		<jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+		<jackson-bom.version>3.1.7</jackson-bom.version>
+		<!-- Spring Framework CVE-2026-47890/-47892 CRITICAL. Remove once the Boot BOM is at or above this.
+		     STAM-448 pinned booking/catalog/payment/identity already; gateway was the one still missing it. -->
+		<spring-framework.version>7.0.9</spring-framework.version>
 	</properties>
 
 	<dependencyManagement>
@@ -41,6 +47,12 @@
 				<version>${spring-cloud.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
+			</dependency>
+			<!-- Not managed by the Boot BOM; pulled in by spring-cloud-starter. CVE-2026-8763 CRITICAL, fixed in 1.85 -->
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcprov-jdk18on</artifactId>
+				<version>1.85</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
@@ -61,6 +73,35 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- STAM-67 / AC1: structured JSON logs. -->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>8.0</version>
+		</dependency>
+
+		<!-- STAM-67 / AC2: WebFlux has no request thread to pin MDC to, so
+		     correlationId travels in the Reactor Context instead (set via
+		     .contextWrite() in CorrelationIdFilter). This dependency is what
+		     makes Spring Boot auto-enable Reactor's automatic context
+		     propagation, which is what actually bridges that Context value
+		     into MDC for every log line emitted while the request is being
+		     processed. Without it, .contextWrite() alone does nothing for
+		     logging. -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>context-propagation</artifactId>
+		</dependency>
+
+		<!-- STAM-67 / AC1 (traceId): no exporter configured yet, that is
+		     STAM-68's job (OTel tracing across HTTP + Kafka). This alone gets
+		     Boot's BraveAutoConfiguration to generate a span per request and
+		     its MDCScopeDecorator to put traceId/spanId into every log line. -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-tracing-bridge-otel</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
@@ -69,16 +110,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis-reactive</artifactId>
-		</dependency>
-
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-		</dependency>
-
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-config</artifactId>
 		</dependency>
 
 		<!-- Test -->
@@ -110,6 +141,13 @@
 			<groupId>org.testcontainers</groupId>
 			<artifactId>junit-jupiter</artifactId>
 			<version>1.21.1</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.wiremock</groupId>
+			<artifactId>wiremock-standalone</artifactId>
+			<version>3.13.0</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
