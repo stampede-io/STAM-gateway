@@ -35,6 +35,14 @@ probes:
 
 # Non-sensitive config -> ConfigMap, mounted as env vars.
 config:
+  # STAM-68: OTel Java agent exports here (no in-process SDK/exporter
+  # dependency on the app side -- just the bridge, see pom.xml). always_on
+  # by default; values-prod.yaml overrides to 10% (AC5).
+  OTEL_SERVICE_NAME: "gateway"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring.svc.cluster.local:4317"
+  OTEL_TRACES_SAMPLER: "always_on"
+  OTEL_METRICS_EXPORTER: "none"
+  OTEL_LOGS_EXPORTER: "none"
   SPRING_PROFILES_ACTIVE: "k8s"
   SERVER_PORT: "8080"
   REDIS_HOST: "redis"
