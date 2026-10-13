@@ -99,7 +99,7 @@
 		     its MDCScopeDecorator to put traceId/spanId into every log line. -->
 		<dependency>
 			<groupId>io.micrometer</groupId>
-			<artifactId>micrometer-tracing-bridge-brave</artifactId>
+			<artifactId>micrometer-tracing-bridge-otel</artifactId>
 		</dependency>
 
 		<dependency>
