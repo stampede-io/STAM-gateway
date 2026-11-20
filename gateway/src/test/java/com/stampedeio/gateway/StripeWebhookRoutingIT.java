@@ -1,13 +1,17 @@
 package com.stampedeio.gateway;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
@@ -47,6 +51,9 @@ class StripeWebhookRoutingIT {
 
     @Autowired
     WebTestClient webClient;
+
+    @LocalServerPort
+    int port;
 
     @MockitoBean
     ReactiveJwtDecoder jwtDecoder;
@@ -123,6 +130,25 @@ class StripeWebhookRoutingIT {
         webClient.get().uri("/api/v1/payments/webhook")
                 .exchange()
                 .expectStatus().isUnauthorized();
+
+        assertThat(receivedPath.get()).isNull();
+    }
+
+    // Payment's Tomcat would normalize these to /refunds; the opening must stay
+    // an exact match so none of them reach payment without a JWT.
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/api/v1/payments/webhook/../refunds",
+            "/api/v1/payments/webhook/%2e%2e/refunds",
+            "/api/v1/payments/webhook;x=1",
+            "/api/v1/payments/webhook/"
+    })
+    void lookalikePaths_neverReachPaymentWithoutJwt(String path) {
+        webClient.post().uri(URI.create("http://localhost:" + port + path))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus().is4xxClientError();
 
         assertThat(receivedPath.get()).isNull();
     }
