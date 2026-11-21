@@ -30,6 +30,11 @@ public class SecurityConfig {
                                 "/api/v1/oauth2/**",
                                 "/api/v1/users/register"
                         ).permitAll()
+                        // STAM-449: Stripe signs its webhook (Stripe-Signature HMAC over
+                        // the raw body) and never sends a JWT. Payment's
+                        // Webhook.constructEvent is the authentication for this one
+                        // POST; every other /api/v1/payments/** path still needs a JWT.
+                        .pathMatchers(HttpMethod.POST, "/api/v1/payments/webhook").permitAll()
                         // Catalog reads are public (CLAUDE.md §16); writes still need a JWT.
                         .pathMatchers(HttpMethod.GET,
                                 "/api/v1/venues/**",
